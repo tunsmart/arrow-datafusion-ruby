@@ -17,7 +17,7 @@ impl RbDataFrame {
     }
 
     pub(crate) fn collect(&self) -> Result<Vec<RbRecordBatch>, Error> {
-        let result = self.df.collect();
+        let result = (*self.df).clone().collect();
         let batches = wait_for_future(result).map_err(DataFusionError::from)?;
         Ok(batches
             .into_iter()

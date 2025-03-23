@@ -28,6 +28,10 @@ fn init() -> Result<(), Error> {
         method!(context::RbSessionContext::register_csv, 2),
     )?;
     ctx_class.define_method("sql", method!(context::RbSessionContext::sql, 1))?;
+    ctx_class.define_method(
+        "register_object_store",
+        method!(context::RbSessionContext::register_object_store, 1),
+    )?;
 
     let df_class = datafusion().define_class("DataFrame", Default::default())?;
     df_class.define_method("collect", method!(dataframe::RbDataFrame::collect, 0))?;
