@@ -1,5 +1,5 @@
 use datafusion::arrow::{
-    array::{Float64Array, Int64Array, StringArray},
+    array::{Float64Array, Int64Array, StringArray, StringViewArray},
     datatypes::DataType,
     record_batch::RecordBatch,
 };
@@ -22,8 +22,6 @@ impl RbRecordBatch {
         let mut columns_by_name: HashMap<String, Vec<Value>> = HashMap::new();
         for (i, field) in self.rb.schema().fields().iter().enumerate() {
             let column = self.rb.column(i);
-            println!("Column '{}' has type: {:?}", field.name(), column.data_type());
-            println!("Column '{}' has array type: {:?}", field.name(), column.as_ref());
             columns_by_name.insert(
                 field.name().clone(),
                 match column.data_type() {
@@ -35,8 +33,10 @@ impl RbRecordBatch {
                         let array = column.as_any().downcast_ref::<Float64Array>().unwrap();
                         array.values().iter().map(|v| (*v as f64).into()).collect()
                     }
-                    DataType::Utf8 | DataType::LargeUtf8 => {
+                    DataType::Utf8 | DataType::LargeUtf8 | DataType::Utf8View => {
                         if let Some(array) = column.as_any().downcast_ref::<StringArray>() {
+                            array.iter().map(|opt_v| opt_v.unwrap_or("").to_string().into()).collect()
+                        } else if let Some(array) = column.as_any().downcast_ref::<StringViewArray>() {
                             array.iter().map(|opt_v| opt_v.unwrap_or("").to_string().into()).collect()
                         } else {
                             return Err(DataFusionError::CommonError(format!(
