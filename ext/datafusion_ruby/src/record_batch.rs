@@ -1,9 +1,9 @@
 use datafusion::arrow::{
-    array::{Float64Array, Int64Array, StringArray, StringViewArray, TimestampMillisecondArray},
+    array::{Array, Float64Array, Int64Array, MapArray, StringArray, StringViewArray, TimestampMillisecondArray},
     datatypes::{DataType, TimeUnit},
     record_batch::RecordBatch,
 };
-use magnus::{Error, Value};
+use magnus::{Error, RHash, Value};
 
 use crate::errors::DataFusionError;
 use std::collections::HashMap;
@@ -45,23 +45,46 @@ impl RbRecordBatch {
                             column.data_type(),
                             column.as_ref()
                         ))
-                        .into());
+                        .into())
                     }
                 }
                 DataType::Timestamp(TimeUnit::Millisecond, tz) => {
                     println!("Attempting to handle timestamp with timezone: {:?}", tz);
-                    if let Some(array) = column.as_any().downcast_ref::<TimestampMillisecondArray>() {
-                        println!("Successfully downcasted to TimestampMillisecondArray");
-                        array.values().iter().map(|ts_millis| (*ts_millis).into()).collect()
-                    } else {
-                        println!("Failed to downcast to TimestampMillisecondArray");
-                        return Err(DataFusionError::CommonError(format!(
+                    let array = column.as_any().downcast_ref::<TimestampMillisecondArray>()
+                        .ok_or_else(|| DataFusionError::CommonError(format!(
                             "failed to downcast timestamp array: {} (array: {:?})",
                             column.data_type(),
                             column.as_ref()
-                        ))
-                        .into());
-                    }
+                        )))?;
+                    array.values().iter().map(|ts_millis| (*ts_millis).into()).collect()
+                }
+                DataType::Map(field, _) => {
+                    println!("Processing Map type with field: {:?}", field);
+                    let array = column.as_any().downcast_ref::<MapArray>()
+                        .ok_or_else(|| DataFusionError::CommonError(format!(
+                            "failed to downcast map array: {} (array: {:?})",
+                            column.data_type(),
+                            column.as_ref()
+                        )))?;
+                    array.iter().map(|opt_struct| {
+                        if let Some(struct_array) = opt_struct {
+                            let hash = RHash::new();
+                            let keys = struct_array.column(0).as_any().downcast_ref::<StringArray>()
+                                .ok_or_else(|| DataFusionError::CommonError("failed to get keys array".to_string()))
+                                .unwrap();
+                            let values = struct_array.column(1).as_any().downcast_ref::<StringArray>()
+                                .ok_or_else(|| DataFusionError::CommonError("failed to get values array".to_string()))
+                                .unwrap();
+                            for i in 0..struct_array.len() {
+                                let key = keys.value(i).to_string();
+                                let value = values.value(i).to_string();
+                                hash.aset(key, value).unwrap();
+                            }
+                            hash.into()
+                        } else {
+                            RHash::new().into()
+                        }
+                    }).collect()
                 }
                 unknown => {
                     return Err(DataFusionError::CommonError(format!(
