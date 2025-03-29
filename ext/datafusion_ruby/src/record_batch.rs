@@ -22,9 +22,6 @@ impl RbRecordBatch {
         let mut columns_by_name: HashMap<String, Vec<Value>> = HashMap::new();
         for (i, field) in self.rb.schema().fields().iter().enumerate() {
             let column = self.rb.column(i);
-            println!("Processing column '{}' with data type: {:?}", field.name(), column.data_type());
-            println!("Array type: {:?}", column.as_ref());
-            
             let result = match column.data_type() {
                 DataType::Int64 => {
                     let array = column.as_any().downcast_ref::<Int64Array>().unwrap();
@@ -48,8 +45,7 @@ impl RbRecordBatch {
                         .into())
                     }
                 }
-                DataType::Timestamp(TimeUnit::Millisecond, tz) => {
-                    println!("Attempting to handle timestamp with timezone: {:?}", tz);
+                DataType::Timestamp(TimeUnit::Millisecond, _tz) => {
                     let array = column.as_any().downcast_ref::<TimestampMillisecondArray>()
                         .ok_or_else(|| DataFusionError::CommonError(format!(
                             "failed to downcast timestamp array: {} (array: {:?})",
@@ -59,7 +55,6 @@ impl RbRecordBatch {
                     array.values().iter().map(|ts_millis| (*ts_millis).into()).collect()
                 }
                 DataType::Map(field, _) => {
-                    println!("Processing Map type with field: {:?}", field);
                     let array = column.as_any().downcast_ref::<MapArray>()
                         .ok_or_else(|| DataFusionError::CommonError(format!(
                             "failed to downcast map array: {} (array: {:?})",
@@ -73,7 +68,6 @@ impl RbRecordBatch {
                                 .ok_or_else(|| DataFusionError::CommonError("failed to get keys array".to_string()))
                                 .unwrap();
                             
-                            // Get the value type from the struct field
                             if let DataType::Struct(fields) = field.data_type() {
                                 let value_type = &fields[1].data_type();
                                 match value_type {
