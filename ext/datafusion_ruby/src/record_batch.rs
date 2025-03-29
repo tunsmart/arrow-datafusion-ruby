@@ -72,13 +72,45 @@ impl RbRecordBatch {
                             let keys = struct_array.column(0).as_any().downcast_ref::<StringArray>()
                                 .ok_or_else(|| DataFusionError::CommonError("failed to get keys array".to_string()))
                                 .unwrap();
-                            let values = struct_array.column(1).as_any().downcast_ref::<StringArray>()
-                                .ok_or_else(|| DataFusionError::CommonError("failed to get values array".to_string()))
+                            
+                            // Get the value type from the struct field
+                            if let DataType::Struct(fields) = field.data_type() {
+                                let value_type = &fields[1].data_type();
+                                match value_type {
+                                    DataType::Utf8 => {
+                                        let values = struct_array.column(1).as_any().downcast_ref::<StringArray>()
+                                            .ok_or_else(|| DataFusionError::CommonError("failed to get string values array".to_string()))
+                                            .unwrap();
+                                        for i in 0..struct_array.len() {
+                                            let key = keys.value(i).to_string();
+                                            let value = values.value(i).to_string();
+                                            hash.aset(key, value).unwrap();
+                                        }
+                                    }
+                                    DataType::Float64 => {
+                                        let values = struct_array.column(1).as_any().downcast_ref::<Float64Array>()
+                                            .ok_or_else(|| DataFusionError::CommonError("failed to get float values array".to_string()))
+                                            .unwrap();
+                                        for i in 0..struct_array.len() {
+                                            let key = keys.value(i).to_string();
+                                            let value = values.value(i);
+                                            hash.aset(key, value).unwrap();
+                                        }
+                                    }
+                                    other => {
+                                        return Err(DataFusionError::CommonError(format!(
+                                            "unsupported value type in map: {:?}",
+                                            other
+                                        )))
+                                        .unwrap();
+                                    }
+                                }
+                            } else {
+                                return Err(DataFusionError::CommonError(format!(
+                                    "invalid map field type: expected struct, got {:?}",
+                                    field.data_type()
+                                )))
                                 .unwrap();
-                            for i in 0..struct_array.len() {
-                                let key = keys.value(i).to_string();
-                                let value = values.value(i).to_string();
-                                hash.aset(key, value).unwrap();
                             }
                             hash.into()
                         } else {
