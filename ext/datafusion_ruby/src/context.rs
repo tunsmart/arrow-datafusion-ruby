@@ -10,12 +10,6 @@ use crate::dataframe::RbDataFrame;
 use crate::errors::DataFusionError;
 use crate::utils::wait_for_future;
 
-/// The following environment variables must be defined:
-///
-/// - AWS_ACCESS_KEY_ID
-/// - AWS_SECRET_ACCESS_KEY
-/// - AWS_REGION
-
 #[magnus::wrap(class = "Datafusion::SessionContext")]
 pub(crate) struct RbSessionContext {
     ctx: SessionContext,
@@ -42,14 +36,30 @@ impl RbSessionContext {
         Ok(RbDataFrame::new(Arc::new(df)))
     }
 
-    pub(crate) fn register_object_store(&self, bucket_name: String) -> Result<(), Error> {
+    pub(crate) fn register_object_store(
+        &self,
+        bucket_name: String,
+        region: Option<String>,
+        access_key_id: Option<String>,
+        secret_access_key: Option<String>,
+    ) -> Result<(), Error> {
+        let region = region.or_else(|| env::var("AWS_REGION").ok())
+            .ok_or_else(|| DataFusionError::CommonError("AWS region not provided and AWS_REGION environment variable not set".to_string()))?;
+            
+        let access_key_id = access_key_id.or_else(|| env::var("AWS_ACCESS_KEY_ID").ok())
+            .ok_or_else(|| DataFusionError::CommonError("AWS access key ID not provided and AWS_ACCESS_KEY_ID environment variable not set".to_string()))?;
+            
+        let secret_access_key = secret_access_key.or_else(|| env::var("AWS_SECRET_ACCESS_KEY").ok())
+            .ok_or_else(|| DataFusionError::CommonError("AWS secret access key not provided and AWS_SECRET_ACCESS_KEY environment variable not set".to_string()))?;
+
         let s3 = AmazonS3Builder::new()
             .with_bucket_name(&bucket_name)
-            .with_region(env::var("AWS_REGION").unwrap())
-            .with_access_key_id(env::var("AWS_ACCESS_KEY_ID").unwrap())
-            .with_secret_access_key(env::var("AWS_SECRET_ACCESS_KEY").unwrap())
+            .with_region(region)
+            .with_access_key_id(access_key_id)
+            .with_secret_access_key(secret_access_key)
             .build()
             .map_err(DataFusionError::from)?;
+
         let path = format!("s3://{bucket_name}");
         let s3_url = Url::parse(&path).unwrap();
         self.ctx.register_object_store(&s3_url, Arc::new(s3));
