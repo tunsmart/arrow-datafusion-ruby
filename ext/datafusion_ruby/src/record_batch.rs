@@ -4,6 +4,7 @@ use datafusion::arrow::{
     record_batch::RecordBatch,
 };
 use magnus::{Error, RHash, Value};
+use chrono::{DateTime, TimeZone, Utc};
 
 use crate::errors::DataFusionError;
 use std::collections::HashMap;
@@ -45,14 +46,20 @@ impl RbRecordBatch {
                         .into())
                     }
                 }
-                DataType::Timestamp(TimeUnit::Millisecond, _tz) => {
+                DataType::Timestamp(TimeUnit::Millisecond, _) => {
                     let array = column.as_any().downcast_ref::<TimestampMillisecondArray>()
                         .ok_or_else(|| DataFusionError::CommonError(format!(
                             "failed to downcast timestamp array: {} (array: {:?})",
                             column.data_type(),
                             column.as_ref()
                         )))?;
-                    array.values().iter().map(|ts_millis| (*ts_millis).into()).collect()
+                    
+                    array.values().iter().map(|ts_millis| {
+                        let secs = ts_millis / 1000;
+                        let nanos = ((ts_millis % 1000) * 1_000_000) as u32;
+                        let dt: DateTime<Utc> = Utc.timestamp_opt(secs, nanos).unwrap();
+                        dt.format("%a %b %d %H:%M:%S UTC %Y").to_string().into()
+                    }).collect()
                 }
                 DataType::Map(field, _) => {
                     let array = column.as_any().downcast_ref::<MapArray>()

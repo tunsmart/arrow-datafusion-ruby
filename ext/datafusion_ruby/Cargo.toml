@@ -13,3 +13,4 @@ magnus = { git = "https://github.com/matsadler/magnus", tag = "0.4.4" }
 object_store = { version = "=0.11.1", features = ["aws", "http"] }
 tokio = { version = "1.0", features = ["macros", "rt", "rt-multi-thread", "sync"] }
 url = "2.5.4"
+chrono = "0.4"
