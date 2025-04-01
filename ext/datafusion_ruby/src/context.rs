@@ -1,4 +1,5 @@
 use datafusion::execution::context::SessionContext;
+use datafusion::execution::config::SessionConfig;
 use datafusion::prelude::*;
 use magnus::Error;
 use object_store::aws::AmazonS3Builder;
@@ -17,8 +18,9 @@ pub(crate) struct RbSessionContext {
 
 impl RbSessionContext {
     pub(crate) fn new() -> Self {
+        let config = SessionConfig::new().with_information_schema(true);
         Self {
-            ctx: SessionContext::new(),
+            ctx: SessionContext::new_with_config(config),
         }
     }
 
@@ -30,8 +32,18 @@ impl RbSessionContext {
         Ok(())
     }
 
-    pub(crate) fn sql(&self, query: String) -> Result<RbDataFrame, Error> {
+    pub(crate) fn create_table(&self, query: String) -> Result<(), Error> {
         let result = self.ctx.sql(&query);
+        wait_for_future(result).map_err(DataFusionError::from)?;
+        Ok(())
+    }
+
+    pub(crate) fn sql(&self, query: String) -> Result<RbDataFrame, Error> {
+        let options = SQLOptions::new()
+            .with_allow_ddl(false)
+            .with_allow_dml(false)
+            .with_allow_statements(false);
+        let result = self.ctx.sql_with_options(&query, options);
         let df = wait_for_future(result).map_err(DataFusionError::from)?;
         Ok(RbDataFrame::new(Arc::new(df)))
     }

@@ -27,6 +27,10 @@ fn init() -> Result<(), Error> {
         "register_csv",
         method!(context::RbSessionContext::register_csv, 2),
     )?;
+    ctx_class.define_method(
+        "create_table",
+        method!(context::RbSessionContext::create_table, 1),
+    )?;
     ctx_class.define_method("sql", method!(context::RbSessionContext::sql, 1))?;
     ctx_class.define_method(
         "register_object_store",
