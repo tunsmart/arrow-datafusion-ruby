@@ -1,5 +1,5 @@
 use datafusion::arrow::{
-    array::{Array, Float64Array, Int64Array, MapArray, StringArray, StringViewArray, TimestampMillisecondArray},
+    array::{Array, Float64Array, Int64Array, MapArray, StringArray, StringViewArray, TimestampMillisecondArray, TimestampNanosecondArray},
     datatypes::{DataType, TimeUnit},
     record_batch::RecordBatch,
 };
@@ -46,20 +46,47 @@ impl RbRecordBatch {
                         .into())
                     }
                 }
-                DataType::Timestamp(TimeUnit::Millisecond, _) => {
-                    let array = column.as_any().downcast_ref::<TimestampMillisecondArray>()
-                        .ok_or_else(|| DataFusionError::CommonError(format!(
-                            "failed to downcast timestamp array: {} (array: {:?})",
-                            column.data_type(),
-                            column.as_ref()
-                        )))?;
-                    
-                    array.values().iter().map(|ts_millis| {
-                        let secs = ts_millis / 1000;
-                        let nanos = ((ts_millis % 1000) * 1_000_000) as u32;
-                        let dt: DateTime<Utc> = Utc.timestamp_opt(secs, nanos).unwrap();
-                        dt.format("%a %b %d %H:%M:%S UTC %Y").to_string().into()
-                    }).collect()
+                DataType::Timestamp(unit, _tz) => {
+                    match unit {
+                        TimeUnit::Millisecond => {
+                            let array = column.as_any().downcast_ref::<TimestampMillisecondArray>()
+                                .ok_or_else(|| DataFusionError::CommonError(format!(
+                                    "failed to downcast timestamp array: {} (array: {:?})",
+                                    column.data_type(),
+                                    column.as_ref()
+                                )))?;
+                            
+                            array.values().iter().map(|ts_millis| {
+                                let secs = ts_millis / 1000;
+                                let nanos = ((ts_millis % 1000) * 1_000_000) as u32;
+                                let dt: DateTime<Utc> = Utc.timestamp_opt(secs, nanos).unwrap();
+                                dt.to_rfc3339().into()
+                            }).collect()
+                        }
+                        TimeUnit::Nanosecond => {
+                            let array = column.as_any().downcast_ref::<TimestampNanosecondArray>()
+                                .ok_or_else(|| DataFusionError::CommonError(format!(
+                                    "failed to downcast timestamp array: {} (array: {:?})",
+                                    column.data_type(),
+                                    column.as_ref()
+                                )))?;
+                            
+                            array.values().iter().map(|ts_nanos| {
+                                let secs = ts_nanos / 1_000_000_000;
+                                let nanos = (ts_nanos % 1_000_000_000) as u32;
+                                let dt: DateTime<Utc> = Utc.timestamp_opt(secs, nanos).unwrap();
+                                dt.to_rfc3339().into()
+                            }).collect()
+                        }
+                        _ => {
+                            return Err(DataFusionError::CommonError(format!(
+                                "unsupported timestamp unit: {:?} (array: {:?})",
+                                unit,
+                                column.as_ref()
+                            ))
+                            .into())
+                        }
+                    }
                 }
                 DataType::Map(field, _) => {
                     let array = column.as_any().downcast_ref::<MapArray>()
