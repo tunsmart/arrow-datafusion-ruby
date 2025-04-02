@@ -60,7 +60,7 @@ impl RbRecordBatch {
                                 let secs = ts_millis / 1000;
                                 let nanos = ((ts_millis % 1000) * 1_000_000) as u32;
                                 let dt: DateTime<Utc> = Utc.timestamp_opt(secs, nanos).unwrap();
-                                dt.to_rfc3339().into()
+                                dt.format("%Y-%m-%dT%H:%M:%S").to_string().into()
                             }).collect()
                         }
                         TimeUnit::Nanosecond => {
@@ -75,7 +75,7 @@ impl RbRecordBatch {
                                 let secs = ts_nanos / 1_000_000_000;
                                 let nanos = (ts_nanos % 1_000_000_000) as u32;
                                 let dt: DateTime<Utc> = Utc.timestamp_opt(secs, nanos).unwrap();
-                                dt.to_rfc3339().into()
+                                dt.format("%Y-%m-%dT%H:%M:%S").to_string().into()
                             }).collect()
                         }
                         _ => {
